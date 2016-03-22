@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>D3 Starter</title>
+<style>
+body {
+  font: 10px sans-serif;
+  margin-left: 10%;
+}
+
+h1, p {
+  padding: 20px;
+  max-width: 1300px;
+}
+
+.background path {
+  fill: none;
+  stroke: #ddd;
+  shape-rendering: crispEdges;
+}
+
+.foreground path {
+  fill: none;
+  stroke-width: 2;
+}
+
+.brush .extent {
+  fill-opacity: .3;
+  stroke: #fff;
+  shape-rendering: crispEdges;
+}
+
+.axis line,
+.axis path {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.axis text {
+  text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, -1px 0 0 #fff;
+  cursor: move;
+}
+
+.type {
+  font-size: 1.8em;
+}
+</style>
+</head>
+
+<body>
+  <h1>A2: Katie Han</h1>
+<script type="text/javascript" src="http://cdn.jsdelivr.net/d3js/latest/d3.min.js"></script>
+<link rel="stylesheet" type="text/css" href="http://cdn.jsdelivr.net/bootstrap/latest/css/bootstrap.css" />
+
+<script>
+
+// use d3.csv('data.csv') to get your data
+var categories = [
+    {"Name": "Sleeping", "Color": "#bf6969"},
+    {"Name": "Personal Care", "Color": "#bf8669"},
+    {"Name": "Household Activities", "Color": "#bfa269"},
+    {"Name": "Caring For & Helping HH Members", "Color": "#bfbf69"},
+    {"Name": "Caring For & Helping Non-HH Members", "Color": "#a2bf69"},
+    {"Name": "Work & Work-Related Activities", "Color": "#86bf69"},
+    {"Name": "Education", "Color": "#69bf69"},
+    {"Name": "Consumer Purchases", "Color": "#69bf86"},
+    {"Name": "Professional & Personal Care Services", "Color": "#69bfa2"},
+    {"Name": "Household Services", "Color": "#69bfbf"},
+    {"Name": "Government Services & Civic Obligations", "Color": "#69a2bf"},
+    {"Name": "Eating and Drinking", "Color": "#6986bf"},
+    {"Name": "Socializing, Relaxing, and Leisure", "Color": "#6969bf"},
+    {"Name": "Sports, Exercise, and Recreation", "Color": "#8669bf"},
+    {"Name": "Religious and Spiritual Activities", "Color": "#a269bf"},
+    {"Name": "Volunteer Activities", "Color": "#a269bf"},
+    {"Name": "Telephone Calls", "Color": "#bf69bf"},
+    {"Name": "Traveling", "Color": "#bf69a2"}
+];
+
+var margin = {top: 50, right: 10, bottom: 10, left: 300},
+    width = 1300 - margin.left - margin.right,
+    height = 600 - margin.top - margin.bottom;
+
+var x = d3.scale.ordinal().rangePoints([0, width], 1),
+    y = {},
+    dragging = {};
+
+var line = d3.svg.line(),
+    axis = d3.svg.axis().orient("left"),
+    background,
+    foreground,
+    active;
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var legendRectSize = 18;
+var legendSpacing = 4;
+
+var legend = svg.selectAll('.legend')
+  .data(categories)
+  .enter()
+  .append('g')
+  .attr('class', 'legend')
+  .attr('transform', function(d, i) {
+    var h = legendRectSize + legendSpacing;
+    var horz = -15 * legendRectSize - legendSpacing;
+    var vert = i * h;
+    return 'translate(' + horz + ',' + vert + ')';
+  });
+
+legend.append('rect')
+  .attr('width', legendRectSize)
+  .attr('height', legendRectSize)
+  .attr('active', false)
+  .style('fill', function(d) { return d.Color; })
+  .style('stroke', function(d) { return d.Color; })
+  .on('mouseover', function() {
+    d3.select(this).attr('opacity', 0.7);
+  })
+  .on('mouseout', function() {
+    d3.select(this).attr('opacity', 1);
+  });
+
+legend.append('text')
+  .attr('x', legendRectSize + legendSpacing)
+  .attr('y', legendRectSize - legendSpacing)
+  .text(function(d) { return d.Name; });
+
+d3.csv("data.csv", function(error, hours) {
+
+  x.domain(dimensions = d3.keys(hours[0]).filter(function(d) {
+    return d != "no" && (y[d] = d3.scale.linear()
+        .domain([0, 100, 200, 700])
+        .range([height, height/2, height/3, 0]));
+  }));
+
+  // Add grey background lines for context.
+  background = svg.append("g")
+      .attr("class", "background")
+    .selectAll("path")
+      .data(hours)
+    .enter().append("path")
+      .attr("d", path);
+
+  // Add foreground lines for focus.
+  foreground = svg.append("g")
+      .attr("class", "foreground")
+    .selectAll("path")
+      .data(hours)
+    .enter().append("path")
+      .attr("d", path)
+      .style("stroke", function(d) {
+        return categories[+d.no].Color;
+      });
+
+  // Add a group element for each dimension.
+  var g = svg.selectAll(".dimension")
+      .data(dimensions)
+    .enter().append("g")
+      .attr("class", "dimension")
+      .attr("transform", function(d) { return "translate(" + x(d) + ")"; })
+      .call(d3.behavior.drag()
+        .origin(function(d) { return {x: x(d)}; })
+        .on("dragstart", function(d) {
+          dragging[d] = x(d);
+          background.attr("visibility", "hidden");
+        })
+        .on("drag", function(d) {
+          dragging[d] = Math.min(width, Math.max(0, d3.event.x));
+          foreground.attr("d", path);
+          dimensions.sort(function(a, b) { return position(a) - position(b); });
+          x.domain(dimensions);
+          g.attr("transform", function(d) { return "translate(" + position(d) + ")"; })
+        })
+        .on("dragend", function(d) {
+          delete dragging[d];
+          transition(d3.select(this)).attr("transform", "translate(" + x(d) + ")");
+          transition(foreground).attr("d", path);
+          background
+              .attr("d", path)
+            .transition()
+              .delay(500)
+              .duration(0)
+              .attr("visibility", null);
+        }));
+
+  // Add an axis and title.
+  g.append("g")
+      .attr("class", "axis")
+      .each(function(d) { d3.select(this).call(axis.scale(y[d])); })
+    .append("text")
+      .style("text-anchor", "middle")
+      .style("font-size", "12pt")
+      .style("margin-bottom", "5pt")
+      .attr("y", -20)
+      .text(function(d) { return d + " (minutes)"; });
+
+  legend.selectAll("rect")
+    .on("click", function(d) {
+    if (d3.select(this).attr("active") == "true") {
+      d3.select(this).attr('active', false)
+        .style('stroke', function(d) { return d.Color; })
+        .style('opacity', 1);
+      active = null;
+      foreground.style("visibility", "visible");
+      background.style("visibility", "visible");
+
+      dimensions.forEach(function(d) {
+        y[d] = d3.scale.linear()
+            .domain([0, 100, 200, 700])
+            .range([height, height/2, height/3, 0]);
+      });
+
+      svg.selectAll(".axis").remove();
+      svg.selectAll(".bar").remove();
+
+      g.append("g")
+          .attr("class", "axis")
+          .each(function(d) { transition(d3.select(this).call(axis.scale(y[d]))); })
+        .append("text").transition()
+          .style("text-anchor", "middle")
+          .style("font-size", "12pt")
+          .style("margin-bottom", "5pt")
+          .attr("y", -20)
+          .text(function(d) { return d + " (minutes)"; });
+
+      foreground.attr("d", path);
+      background.attr("d", path).style("visibility", "hidden");
+
+    } else {
+      if (active != this) {
+        d3.select(active).attr('active', false)
+          .style('stroke', function(d) { return d.Color; })
+          .style('opacity', 1);
+      }
+      active = this;
+      d3.select(this).attr('active', true)
+        .style('stroke', "black")
+        .style('opacity', 0.7);
+      foreground.style("visibility", "hidden");
+      background.style("visibility", "hidden");
+
+      dimensions.forEach(function(d) {
+        y[d] = d3.scale.linear()
+            .domain([0, 24])
+            .range([height, 0]);
+      });
+
+      svg.selectAll(".axis").remove();
+
+      g.append("g")
+          .attr("class", "axis")
+          .each(function(d) { transition(d3.select(this).call(axis.scale(y[d]))); })
+        .append("text").transition()
+          .style("text-anchor", "middle")
+          .style("font-size", "12pt")
+          .style("margin-bottom", "5pt")
+          .attr("y", -20)
+          .text(function(d) { return d + " (hours)"; });
+
+      svg.selectAll(".bar").remove();
+
+      var hght = 540;
+      var wid = 30;
+
+      g.append("g")
+          .attr("class", "bar")
+          .each(function(p) { 
+            var raw = hours[categories.indexOf(d)][p];
+            var val = (hght/24) * raw/60.0;
+            transition(d3.select(this).append("rect")
+              .attr("width", wid)
+              .style("fill", d.Color)
+              .attr("y", height - val)
+              .attr("height", val)
+              .append("title")
+              .text(raw + " minutes")); 
+          });
+    }
+  });
+});
+
+function position(d) {
+  var v = dragging[d];
+  return v == null ? x(d) : v;
+}
+
+function transition(g) {
+  return g.transition().duration(500);
+}
+
+// Returns the path for a given data point.
+function path(d) {
+  return line(dimensions.map(function(p) { return [position(p), y[p](d[p])]; }));
+}
+
+</script>
+<p>My visualization takes a look at the average time breakdown data for: all Americans, all female participants of age 18-22, my own weekends, and my own weekdays. The parallel coordinate view provides a quick look at the four categories, and immediate comparisons can be made between them by dragging the axes around to change the order. The axes are scaled to show the lines near the bottom more clearly. The boxes in the legend can be toggled to view specific data for each category. The axes for this chart is scaled out of 24 hours (one day). Hover over the bars for ~*numbers*~ </p>
+</body>
+</html>
